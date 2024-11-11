@@ -1,8 +1,8 @@
 const keycloakConfig = {
-  issuer: 'https://identity-dev.kshema.co/realms/React-native-application-test',
-  clientId: 'test_client',
+  issuer: 'https://identity-dev.kshema.co/realms/keycloak-kshema',
+  clientId: 'react_native_client',
   redirectUrl: 'simpleapp://callback',
-  clientSecret: 'lMj9UVLT2e63PoWLcTsbKwaLZG0ex45D',
+  clientSecret: 'j3pik5w3fgk3K9nul3iq8WdHkN6NAooM',
   scopes: ['openid', 'profile'],
 };
 
