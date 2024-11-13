@@ -19,6 +19,24 @@ const styles = StyleSheet.create({
     width: '30%',
     marginBottom: 20,
   },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  label: {
+    width: 100,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 10,
+    borderRadius: 5,
+    backgroundColor: '#fff',
+  },
 });
 
 export default styles;
