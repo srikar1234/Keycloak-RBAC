@@ -8,7 +8,7 @@ import keycloakConfig from '../keycloakConfig.js';
 function AdminScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-
+  const userRole = route.params?.userRole
   const [authState, setAuthState] = useState(() => JSON.parse(route.params?.authStateString)); // Default authState
   const [timeLeft, setTimeLeft] = useState(0);
   const [message, setMessage] = useState('');
@@ -36,6 +36,36 @@ function AdminScreen() {
     return () => clearInterval(timer);
   }, [authState]);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // Prevent the default back action
+      e.preventDefault();
+  
+      // Show confirmation alert only once
+      Alert.alert(
+        'Confirm',
+        'Do you want to go back?',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => {} },
+          {
+            text: 'Go Back',
+            style: 'destructive',
+            onPress: () => {
+              // Remove the listener to avoid loop
+              unsubscribe();
+              // Navigate back to UserScreen and pass updated auth state
+              navigation.navigate('User', {
+                authStateString: JSON.stringify(authState), userRole,
+              });
+            },
+          },
+        ]
+      );
+    });
+  
+    return unsubscribe; // Cleanup listener on unmount
+  }, [navigation, authState]);
+
   // Logout Function
   const handleLogout = async () => {
     try {
@@ -51,7 +81,6 @@ function AdminScreen() {
   // Refresh Token Function
   const handleRefreshToken = async () => {
     const currentRefreshToken = authState.refreshToken || authState.refresh_token;
-  
     try {
       const response = await fetch(`${keycloakConfig.issuer}/protocol/openid-connect/token`, {
         method: 'POST',
@@ -68,16 +97,27 @@ function AdminScreen() {
   
       if (response.ok) {
         const newAuthState = await response.json();
-        setAuthState(newAuthState); // Directly update to newAuthState
-        setTimeLeft(Math.max(0, Math.floor(newAuthState.expires_in)));
+        setAuthState(newAuthState); // Update the authState with the new token details
+        setTimeLeft(Math.max(0, Math.floor(newAuthState.expires_in))); // Reset timer with new expiry time
+        sendAuthStateToUserScreen(newAuthState); // Call the new function to send authState back
         Alert.alert('Token Refreshed', 'Token timer has been reset');
       } else {
+        console.error('Failed to refresh token.');
         Alert.alert('Error', 'Failed to refresh token');
       }
     } catch (error) {
+      console.error('Failed to refresh token:', error.message);
       Alert.alert('Error', `Failed to refresh token: ${error.message}`);
     }
   };
+  
+  // Function to send updated authState to UserScreen
+  const sendAuthStateToUserScreen = (updatedAuthState) => {
+    navigation.setParams({
+      authStateString: JSON.stringify(updatedAuthState),
+    });
+  };
+  
 // Show Access Token
 const handleShowAccessToken = () => {
   const currentAccessToken = authState.accessToken || authState.access_token;
@@ -216,13 +256,12 @@ const displayResults = (title, usernames) => {
     setMessage(`No ${title.toLowerCase()} found.`);
   }
 };
-
 const handlePOSPApproval = async () => {
   const currentAccessToken = authState.accessToken || authState.access_token;
 
   try {
-    console.log('Approving POSP users...');
-    
+    console.log('Fetching pending POSP users for approval...');
+
     // Step 1: Fetch all users
     const users = await fetchAllUsers(currentAccessToken);
 
@@ -242,39 +281,61 @@ const handlePOSPApproval = async () => {
       return;
     }
 
-    // Step 4: Enable POSP users
+    const approvedUsers = [];
+
+    // Step 4: Prompt the app user for each pending user
     for (const username of pospUsers) {
       const user = users.find((u) => u.username === username);
 
       if (user) {
-        const updateResponse = await fetch(
-          `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users/${user.id}`,
-          {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${currentAccessToken}`,
-            },
-            body: JSON.stringify({ ...user, enabled: true }),
-          }
-        );
+        const approveUser = await new Promise((resolve) => {
+          Alert.alert(
+            'Approve User',
+            `Do you want to approve the following POSP user?\n\nUsername: ${user.username}\nFirst Name: ${user.firstName || 'N/A'}\nLast Name: ${user.lastName || 'N/A'}`,
+            [
+              { text: 'No', onPress: () => resolve(false) },
+              { text: 'Yes', onPress: () => resolve(true) },
+            ]
+          );
+        });
 
-        if (updateResponse.ok) {
-          console.log(`User ${username} approved successfully.`);
+        if (approveUser) {
+          const updateResponse = await fetch(
+            `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users/${user.id}`,
+            {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${currentAccessToken}`,
+              },
+              body: JSON.stringify({ ...user, enabled: true }),
+            }
+          );
+
+          if (updateResponse.ok) {
+            console.log(`User ${username} approved successfully.`);
+            approvedUsers.push(username);
+          } else {
+            const errorDetail = await updateResponse.text();
+            console.error(`Failed to approve user ${username}:`, errorDetail);
+          }
         } else {
-          const errorDetail = await updateResponse.text();
-          console.error(`Failed to approve user ${username}:`, errorDetail);
+          console.log(`User ${username} was not approved.`);
         }
       }
     }
 
-    setMessage(`POSP Users Approved:\n${pospUsers.join('\n')}`);
+    // Step 5: Display results
+    if (approvedUsers.length > 0) {
+      setMessage(`POSP Users Approved:\n${approvedUsers.join('\n')}`);
+    } else {
+      setMessage('No users were approved.');
+    }
   } catch (error) {
     console.error('Error during POSP approval:', error.message);
     Alert.alert('Error', `Failed to approve POSP users: ${error.message}`);
   }
 };
-
   
   return (
     <View style={styles.container}>
