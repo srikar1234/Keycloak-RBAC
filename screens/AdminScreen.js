@@ -1,5 +1,3 @@
-
-// screens/AdminScreen.js
 import React, { useEffect, useState } from 'react';
 import { View, Text, Button, Alert } from 'react-native';
 import styles from '../styles/style.js';
@@ -10,46 +8,39 @@ import keycloakConfig from '../keycloakConfig.js';
 function AdminScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  // Parsing the authState string to convert it back to an object for use
-  const userRole = route.params?.userRole;
-  const authState = JSON.parse(route.params?.authStateString);
-  const refreshToken = authState?.refreshToken;
+
+  const [authState, setAuthState] = useState(() => JSON.parse(route.params?.authStateString)); // Default authState
   const [timeLeft, setTimeLeft] = useState(0);
   const [message, setMessage] = useState('');
-  const tokenPayload = JSON.parse(atob(authState.accessToken.split('.')[1]));
-  const clientRoles = tokenPayload?.resource_access?.account?.roles || [];
-  const associatedRoles = clientRoles.map(role => `Role: ${role}`).join('\n');
-
-  let timer;
 
   useEffect(() => {
-    console.log('Admin authenticated successfully');
+    const AT = authState.accessToken || authState.access_token;
+    const tokenPayload = JSON.parse(atob(AT.split('.')[1]));
 
-    // Calculate the time left for token expiration
+    // Calculate initial time left
     const expiryTime = tokenPayload.exp * 1000 - Date.now();
-    setTimeLeft(Math.max(0, Math.floor(expiryTime / 1000))); // Set initial time left in seconds
+    setTimeLeft(Math.max(0, Math.floor(expiryTime / 1000)));
 
-    // Set up an interval to update the time left every second
-    timer = setInterval(() => {
+    // Timer for token expiration
+    const timer = setInterval(() => {
       setTimeLeft((prevTimeLeft) => {
         if (prevTimeLeft <= 1) {
-          // Clear the interval and logout the admin when the timer reaches zero
           clearInterval(timer);
           handleLogout();
           return 0;
         }
-        return prevTimeLeft - 1; // Decrement the time left by one second
+        return prevTimeLeft - 1;
       });
     }, 1000);
 
-    // Clear the interval when the component unmounts
     return () => clearInterval(timer);
-  }, []);
+  }, [authState]);
 
-  // Function to handle admin logout
+  // Logout Function
   const handleLogout = async () => {
     try {
-      await logoutUser(refreshToken);
+      const currentRefreshToken = authState.refreshToken || authState.refresh_token;
+      await logoutUser(currentRefreshToken);
       Alert.alert('Logout Successful', 'Admin has been logged out');
       navigation.navigate('Login');
     } catch (error) {
@@ -57,8 +48,10 @@ function AdminScreen() {
     }
   };
 
-  // Function to handle refresh token
+  // Refresh Token Function
   const handleRefreshToken = async () => {
+    const currentRefreshToken = authState.refreshToken || authState.refresh_token;
+  
     try {
       const response = await fetch(`${keycloakConfig.issuer}/protocol/openid-connect/token`, {
         method: 'POST',
@@ -69,12 +62,13 @@ function AdminScreen() {
           grant_type: 'refresh_token',
           client_id: keycloakConfig.clientId,
           client_secret: keycloakConfig.clientSecret,
-          refresh_token: refreshToken,
+          refresh_token: currentRefreshToken,
         }).toString(),
       });
-
+  
       if (response.ok) {
         const newAuthState = await response.json();
+        setAuthState(newAuthState); // Directly update to newAuthState
         setTimeLeft(Math.max(0, Math.floor(newAuthState.expires_in)));
         Alert.alert('Token Refreshed', 'Token timer has been reset');
       } else {
@@ -84,66 +78,230 @@ function AdminScreen() {
       Alert.alert('Error', `Failed to refresh token: ${error.message}`);
     }
   };
+// Show Access Token
+const handleShowAccessToken = () => {
+  const currentAccessToken = authState.accessToken || authState.access_token;
+  setMessage(`Access Token:\n${currentAccessToken}`);
+};
 
-  // Function to display admin permissions
-  const handlePermissionsPress = () => {
-    setMessage(`Admin roles associated with the client:\n${associatedRoles}`);
-  };
+// Show Disabled Users
+const handleShowDisabledUsers = async () => {
+  const currentAccessToken = authState.accessToken || authState.access_token;
 
-  // Function to display admin role
-  const handleRolePress = () => {
-    setMessage(`Admin role: ${userRole}`);
-  };
+  try {
+    console.log('Fetching disabled users...');
+    const users = await fetchAllUsers(currentAccessToken);
+    const disabledUsers = users.filter((user) => !user.enabled).map((user) => user.username);
+    displayResults('Disabled Users', disabledUsers);
+  } catch (error) {
+    Alert.alert('Error', `Failed to fetch disabled users: ${error.message}`);
+  }
+};
 
-  // Function to fetch admin profile data
-  const handleUserProfilePress = async () => {
-    try {
-      const response = await fetch(`${keycloakConfig.issuer}/protocol/openid-connect/userinfo`, {
+// Show Guest Users
+const handleShowGuestUsers = async () => {
+  const currentAccessToken = authState.accessToken || authState.access_token;
+
+  try {
+    console.log('Fetching guest users...');
+    const users = await fetchAllUsers(currentAccessToken);
+    const guestUsers = await filterUsersByRole(users, 'Guest', currentAccessToken);
+    displayResults('Guest Users', guestUsers);
+  } catch (error) {
+    Alert.alert('Error', `Failed to fetch guest users: ${error.message}`);
+  }
+};
+
+// Show Pending Approvals
+const handleShowPendingApprovals = async () => {
+  const currentAccessToken = authState.accessToken || authState.access_token;
+
+  try {
+    console.log('Fetching pending approvals...');
+    const users = await fetchAllUsers(currentAccessToken);
+    const pendingApprovals = await filterUsersByRole(
+      users,
+      'POSP',
+      currentAccessToken,
+      (user) => !user.enabled // Additional filter: user is disabled
+    );
+    displayResults('Pending Approvals', pendingApprovals);
+  } catch (error) {
+    Alert.alert('Error', `Failed to fetch pending approvals: ${error.message}`);
+  }
+};
+
+// Utility to fetch all users
+const fetchAllUsers = async (accessToken) => {
+  try {
+    const response = await fetch(
+      `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users?enabled=false`,
+      {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${authState.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
-      });
-      if (response.ok) {
-        const userData = await response.json();
-        setMessage(`Admin Profile Data:\n${JSON.stringify(userData, null, 2)}`);
-      } else {
-        Alert.alert('Error', 'Failed to fetch admin profile data');
       }
-    } catch (error) {
-      Alert.alert('Error', `Failed to fetch admin profile data: ${error.message}`);
-    }
-  };
+    );
 
+    if (!response.ok) {
+      const errorDetail = await response.text();
+      console.error('Failed to fetch users:', errorDetail);
+      throw new Error('Failed to fetch users');
+    }
+
+    return await response.json(); // Return parsed users
+  } catch (error) {
+    console.error('Error fetching all users:', error.message);
+    throw error;
+  }
+};
+
+// Utility to fetch role mappings for a user
+const fetchUserRoleMappings = async (userId, accessToken) => {
+  try {
+    const response = await fetch(
+      `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users/${userId}/role-mappings`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch roles for user: ${userId}`);
+      return null; // Return null if fetching roles fails
+    }
+
+    return await response.json(); // Return parsed role mappings
+  } catch (error) {
+    console.error(`Error fetching role mappings for user ${userId}:`, error.message);
+    return null;
+  }
+};
+
+// Utility to filter users based on roles and attributes
+const filterUsersByRole = async (users, roleName, accessToken, additionalFilter) => {
+  const filteredUsers = [];
+
+  for (const user of users) {
+    if (additionalFilter && !additionalFilter(user)) {
+      continue; // Skip if the user does not satisfy the additional filter
+    }
+
+    const roleMappings = await fetchUserRoleMappings(user.id, accessToken);
+
+    if (roleMappings) {
+      const clientRoles = roleMappings.clientMappings?.[keycloakConfig.clientId]?.mappings || [];
+      const hasRole = clientRoles.some((role) => role.name === roleName);
+
+      if (hasRole) {
+        filteredUsers.push(user.username); // Add username to the filtered list
+      }
+    }
+  }
+
+  return filteredUsers;
+};
+
+// Utility to display results
+const displayResults = (title, usernames) => {
+  if (usernames.length > 0) {
+    console.log(`${title} fetched successfully:`, usernames);
+    setMessage(`${title}:\n${usernames.join('\n')}`);
+  } else {
+    console.log(`No ${title.toLowerCase()} found.`);
+    setMessage(`No ${title.toLowerCase()} found.`);
+  }
+};
+
+const handlePOSPApproval = async () => {
+  const currentAccessToken = authState.accessToken || authState.access_token;
+
+  try {
+    console.log('Approving POSP users...');
+    
+    // Step 1: Fetch all users
+    const users = await fetchAllUsers(currentAccessToken);
+
+    // Step 2: Filter users with `enabled = false`
+    const disabledUsers = users.filter((user) => !user.enabled);
+
+    // Step 3: Check for "POSP" client role
+    const pospUsers = await filterUsersByRole(
+      disabledUsers,
+      'POSP',
+      currentAccessToken
+    );
+
+    if (pospUsers.length === 0) {
+      console.log('No POSP users found for approval.');
+      setMessage('No POSP users found for approval.');
+      return;
+    }
+
+    // Step 4: Enable POSP users
+    for (const username of pospUsers) {
+      const user = users.find((u) => u.username === username);
+
+      if (user) {
+        const updateResponse = await fetch(
+          `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users/${user.id}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${currentAccessToken}`,
+            },
+            body: JSON.stringify({ ...user, enabled: true }),
+          }
+        );
+
+        if (updateResponse.ok) {
+          console.log(`User ${username} approved successfully.`);
+        } else {
+          const errorDetail = await updateResponse.text();
+          console.error(`Failed to approve user ${username}:`, errorDetail);
+        }
+      }
+    }
+
+    setMessage(`POSP Users Approved:\n${pospUsers.join('\n')}`);
+  } catch (error) {
+    console.error('Error during POSP approval:', error.message);
+    Alert.alert('Error', `Failed to approve POSP users: ${error.message}`);
+  }
+};
+
+  
   return (
     <View style={styles.container}>
-      <Text>Admin Screen</Text>
-      <Text>{message}</Text>
-      <Text>Time left until token expires: {timeLeft} seconds</Text>
+      <Text style={styles.title}>Admin Screen</Text>
+      <Text style={styles.message}>{message}</Text>
+      <Text style={styles.timer}>Time left until token expires: {timeLeft} seconds</Text>
       <View style={styles.gridContainer}>
         <View style={styles.gridItem}>
-          <Button
-            title="Show Permissions"
-            onPress={handlePermissionsPress}
-          />
+          <Button title="Show Access Token" onPress={handleShowAccessToken} />
         </View>
         <View style={styles.gridItem}>
-          <Button
-            title="Show Role"
-            onPress={handleRolePress}
-          />
+          <Button title="Show Disabled Users" onPress={handleShowDisabledUsers} />
         </View>
         <View style={styles.gridItem}>
-          <Button
-            title="Logout"
-            onPress={handleLogout}
-          />
+          <Button title="Show Guest Users" onPress={handleShowGuestUsers} />
         </View>
         <View style={styles.gridItem}>
-          <Button
-            title="Refresh Token"
-            onPress={handleRefreshToken}
-          />
+          <Button title="Show Pending Approvals (POSP)" onPress={handleShowPendingApprovals} />
+        </View>
+        <View style={styles.gridItem}>
+          <Button title="Refresh Token" onPress={handleRefreshToken} />
+        </View>
+        <View style={styles.gridItem}>
+          <Button title="Approve POSP" onPress={handlePOSPApproval} />
+        </View>
+        <View style={styles.gridItem}>
+          <Button title="Logout" onPress={handleLogout} />
         </View>
       </View>
     </View>

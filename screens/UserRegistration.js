@@ -13,6 +13,7 @@ function UserRegistrationScreen() {
   const [lastName, setLastName] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
   const [open, setOpen] = useState(false);
+
   const [roles, setRoles] = useState([
     { label: 'Admin', value: 'Admin-Client' },
     { label: 'User', value: 'User-Client' },
@@ -329,7 +330,7 @@ function UserRegistrationScreen() {
           setOpen={setOpen}
           setValue={setSelectedRole}
           setItems={setRoles}
-          placeholder="Guest"
+          placeholder=""
           style={styles.dropdown}
           dropDownContainerStyle={styles.dropdownContainer}
           listMode="SCROLLVIEW" // Ensures proper scrolling if there are many options
