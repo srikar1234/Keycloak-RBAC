@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, Alert } from 'react-native';
+import { View, Text, Button, Alert, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import styles from '../styles/style.js';
 import { logoutUser } from './LogoutUser.js';
@@ -9,10 +9,11 @@ function UserScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
-  // State to manage authState and token expiration
-  const [authState, setAuthState] = useState(() => JSON.parse(route.params?.authStateString));
+  const [authState, setAuthState] = useState(() =>
+    JSON.parse(route.params?.authStateString || '{}')
+  );
   const [timeLeft, setTimeLeft] = useState(0);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(''); // Initialize message as an empty string
   const userRole = route.params?.userRole;
 
   useEffect(() => {
@@ -27,9 +28,8 @@ function UserScreen() {
     }
   }, [route.params?.authStateString]);
 
-  // Token expiration handling
   useEffect(() => {
-    if (!authState) {
+    if (!authState || !authState.accessToken) {
       console.error('Auth state is not available');
       return;
     }
@@ -42,26 +42,25 @@ function UserScreen() {
       const tokenPayload = JSON.parse(atob(currentAccessToken.split('.')[1]));
       const expiryTime = tokenPayload.exp * 1000 - Date.now();
 
-      setTimeLeft(Math.max(0, Math.floor(expiryTime / 1000))); // Set initial time left in seconds
+      setTimeLeft(Math.max(0, Math.floor(expiryTime / 1000)));
 
       const timer = setInterval(() => {
         setTimeLeft((prevTimeLeft) => {
           if (prevTimeLeft <= 1) {
             clearInterval(timer);
-            handleLogout(); // Logout the user when the timer reaches zero
+            handleLogout();
             return 0;
           }
           return prevTimeLeft - 1;
         });
       }, 1000);
 
-      return () => clearInterval(timer); // Cleanup interval
+      return () => clearInterval(timer);
     } catch (error) {
       console.error('Failed to parse access token payload:', error.message);
     }
   }, [authState]);
 
-  // Function to handle user logout
   const handleLogout = async () => {
     const currentRefreshToken = authState.refreshToken || authState.refresh_token;
     try {
@@ -74,7 +73,6 @@ function UserScreen() {
     }
   };
 
-  // Function to refresh token
   const handleRefreshToken = async () => {
     const currentRefreshToken = authState.refreshToken || authState.refresh_token;
     try {
@@ -93,8 +91,8 @@ function UserScreen() {
 
       if (response.ok) {
         const newAuthState = await response.json();
-        setAuthState(newAuthState); // Update the authState with the new token details
-        setTimeLeft(Math.max(0, Math.floor(newAuthState.expires_in))); // Reset timer with new expiry time
+        setAuthState(newAuthState);
+        setTimeLeft(Math.max(0, Math.floor(newAuthState.expires_in)));
         Alert.alert('Token Refreshed', 'Token timer has been reset');
       } else {
         console.error('Failed to refresh token.');
@@ -106,13 +104,11 @@ function UserScreen() {
     }
   };
 
-  // Function to display the access token
   const handleShowAccessToken = () => {
     const currentAccessToken = authState.accessToken || authState.access_token;
     setMessage(`Access Token:\n${currentAccessToken}`);
   };
 
-  // Function to display user permissions
   const handlePermissionsPress = () => {
     const currentAccessToken = authState.accessToken || authState.access_token;
     try {
@@ -126,12 +122,10 @@ function UserScreen() {
     }
   };
 
-  // Function to display user role
   const handleRolePress = () => {
     setMessage(`User role: ${userRole}`);
   };
 
-  // Function to navigate to Admin Screen
   const handleNavigateToAdminScreen = () => {
     if (userRole === 'Admin-Client') {
       navigation.navigate('Admin', { authStateString: JSON.stringify(authState), userRole });
@@ -140,49 +134,43 @@ function UserScreen() {
     }
   };
 
+  if (!userRole) {
+    return (
+      <TouchableOpacity style={styles.unauthorizedContainer} onPress={handleLogout}>
+        <Text style={styles.unauthorizedMessage}>
+          Unauthorized access. Tap here to log out.
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text>User Screen</Text>
-      <Text>{message}</Text>
-      <Text>Time left until token expires: {timeLeft} seconds</Text> {/* Display the remaining time in seconds */}
+      <Text style={styles.title}>User Screen</Text>
+      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <Text style={styles.timer}>
+        Time left until token expires: {timeLeft} seconds
+      </Text>
       <View style={styles.gridContainer}>
         {userRole === 'Admin-Client' && (
           <View style={styles.gridItem}>
-            <Button
-              title="Go to Admin Screen"
-              onPress={handleNavigateToAdminScreen}
-            />
+            <Button title="Go to Admin Screen" onPress={handleNavigateToAdminScreen} />
           </View>
         )}
         <View style={styles.gridItem}>
-          <Button
-            title="Show Access Token"
-            onPress={handleShowAccessToken}
-          />
+          <Button title="Show Access Token" onPress={handleShowAccessToken} />
         </View>
         <View style={styles.gridItem}>
-          <Button
-            title="Show Permissions"
-            onPress={handlePermissionsPress}
-          />
+          <Button title="Show Permissions" onPress={handlePermissionsPress} />
         </View>
         <View style={styles.gridItem}>
-          <Button
-            title="Show Role"
-            onPress={handleRolePress}
-          />
+          <Button title="Show Role" onPress={handleRolePress} />
         </View>
         <View style={styles.gridItem}>
-          <Button
-            title="Logout"
-            onPress={handleLogout}
-          />
+          <Button title="Logout" onPress={handleLogout} />
         </View>
         <View style={styles.gridItem}>
-          <Button
-            title="Refresh Token"
-            onPress={handleRefreshToken}
-          />
+          <Button title="Refresh Token" onPress={handleRefreshToken} />
         </View>
       </View>
     </View>

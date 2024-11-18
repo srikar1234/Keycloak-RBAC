@@ -37,6 +37,18 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#fff',
   },
+  unauthorizedContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#f8d7da',
+    },
+    unauthorizedMessage: {
+      fontSize: 18,
+      color: '#721c24',
+      textAlign: 'center',
+      padding: 20,
+    },
 });
 
 export default styles;
