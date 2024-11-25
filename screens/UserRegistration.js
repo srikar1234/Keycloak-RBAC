@@ -63,7 +63,7 @@ function UserRegistrationScreen() {
       const userName = phoneNumber;
       const emailId = `${userName}@kshema.co`;
 
-      const isEnabled = !(selectedGroup === 'Guest Group' || selectedGroup === 'POSP Group');
+      const isEnabled = !(selectedGroup === 'Guest' || selectedGroup === 'POSP');
 
       const response = await fetch(
         `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users`,

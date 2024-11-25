@@ -22,6 +22,7 @@ function UserScreen() {
         const updatedAuthState = JSON.parse(route.params.authStateString);
         setAuthState(updatedAuthState);
         console.log('Auth state updated from navigation parameters');
+        console.log('User Authenticated Successfully');
       } catch (error) {
         console.error('Failed to parse updated auth state:', error.message);
       }
@@ -29,14 +30,13 @@ function UserScreen() {
   }, [route.params?.authStateString]);
 
   useEffect(() => {
-    if (!authState || !authState.accessToken) {
+
+    const currentAccessToken = authState.accessToken || authState.access_token;
+
+    if (!authState || !currentAccessToken) {
       console.error('Auth state is not available');
       return;
     }
-
-    console.log('User authenticated successfully');
-
-    const currentAccessToken = authState.accessToken || authState.access_token;
 
     try {
       const tokenPayload = JSON.parse(atob(currentAccessToken.split('.')[1]));
