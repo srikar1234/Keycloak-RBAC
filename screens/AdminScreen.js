@@ -145,7 +145,7 @@ const handleShowGuestUsers = async () => {
   try {
     console.log('Fetching guest users...');
     const users = await fetchAllUsers(currentAccessToken);
-    const guestUsers = await filterUsersByRole(users, 'Guest', currentAccessToken);
+    const guestUsers = await filterUsersByGroup(users, 'Guest', currentAccessToken);
     displayResults('Guest Users', guestUsers);
   } catch (error) {
     Alert.alert('Error', `Failed to fetch guest users: ${error.message}`);
@@ -159,7 +159,7 @@ const handleShowPendingApprovals = async () => {
   try {
     console.log('Fetching pending approvals...');
     const users = await fetchAllUsers(currentAccessToken);
-    const pendingApprovals = await filterUsersByRole(
+    const pendingApprovals = await filterUsersByGroup(
       users,
       'POSP',
       currentAccessToken,
@@ -197,11 +197,37 @@ const fetchAllUsers = async (accessToken) => {
   }
 };
 
-// Utility to fetch role mappings for a user
-const fetchUserRoleMappings = async (userId, accessToken) => {
+// Function to filter users based on a group
+const filterUsersByGroup = async (users, groupName, accessToken, additionalFilter) => {
+  const filteredUsers = [];
+
+  for (const user of users) {
+    if (additionalFilter && !additionalFilter(user)) {
+      continue; // Skip if the user does not satisfy the additional filter
+    }
+
+    // Fetch groups for the user
+    const groups = await fetchUserGroups(user.id, accessToken);
+
+    // Check if the user belongs to the specified group
+    const isInGroup = groups.some((group) => group.name === groupName);
+
+    if (isInGroup) {
+      console.log(`User: ${user.username}`);
+      console.log(`Groups: ${groups.map((group) => group.name).join(', ')}`);
+
+      filteredUsers.push(user.username);
+    }
+  }
+
+  return filteredUsers;
+};
+
+// Helper function to fetch groups for a user
+const fetchUserGroups = async (userId, accessToken) => {
   try {
     const response = await fetch(
-      `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users/${userId}/role-mappings`,
+      `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users/${userId}/groups`,
       {
         method: 'GET',
         headers: {
@@ -211,40 +237,17 @@ const fetchUserRoleMappings = async (userId, accessToken) => {
     );
 
     if (!response.ok) {
-      console.warn(`Failed to fetch roles for user: ${userId}`);
-      return null; // Return null if fetching roles fails
+      console.error(`Failed to fetch groups for user: ${userId}`);
+      return [];
     }
 
-    return await response.json(); // Return parsed role mappings
+    return await response.json(); // Return user groups
   } catch (error) {
-    console.error(`Error fetching role mappings for user ${userId}:`, error.message);
-    return null;
+    console.error(`Error fetching groups for user ${userId}:`, error.message);
+    return [];
   }
 };
 
-// Utility to filter users based on roles and attributes
-const filterUsersByRole = async (users, roleName, accessToken, additionalFilter) => {
-  const filteredUsers = [];
-
-  for (const user of users) {
-    if (additionalFilter && !additionalFilter(user)) {
-      continue; // Skip if the user does not satisfy the additional filter
-    }
-
-    const roleMappings = await fetchUserRoleMappings(user.id, accessToken);
-
-    if (roleMappings) {
-      const clientRoles = roleMappings.clientMappings?.[keycloakConfig.clientId]?.mappings || [];
-      const hasRole = clientRoles.some((role) => role.name === roleName);
-
-      if (hasRole) {
-        filteredUsers.push(user.username); // Add username to the filtered list
-      }
-    }
-  }
-
-  return filteredUsers;
-};
 
 // Utility to display results
 const displayResults = (title, usernames) => {
@@ -269,7 +272,7 @@ const handlePOSPApproval = async () => {
     const disabledUsers = users.filter((user) => !user.enabled);
 
     // Step 3: Check for "POSP" client role
-    const pospUsers = await filterUsersByRole(
+    const pospUsers = await filterUsersByGroup(
       disabledUsers,
       'POSP',
       currentAccessToken

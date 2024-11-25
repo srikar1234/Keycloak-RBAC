@@ -19,15 +19,17 @@ function LoginScreen() {
     try {
       const authState = await authorize(keycloakConfig);
       let userRole = '';
+
       if (authState?.accessToken) {
         const tokenPayload = JSON.parse(atob(authState.accessToken.split('.')[1]));
         const clientRoles = tokenPayload?.resource_access?.[keycloakConfig.clientId]?.roles || [];
+        console.log(clientRoles);
         if (clientRoles.includes('Admin-Client-1')) {
           userRole = 'Admin-Client';
         } else if (clientRoles.includes('User-Client-1')) {
           userRole = 'User-Client';
         }
-        else if (clientRoles.includes('POSP-Client-1'))
+        else if (clientRoles.includes('POSP-client-1'))
           userRole = 'POSP';
       }
       navigation.navigate('User', { authStateString: JSON.stringify(authState), userRole });
