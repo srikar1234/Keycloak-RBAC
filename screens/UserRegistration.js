@@ -15,10 +15,11 @@ function UserRegistrationScreen() {
   const [open, setOpen] = useState(false);
 
   const [groups, setGroups] = useState([
-    { label: 'Admin', value: 'Admin Group' },
-    { label: 'User', value: 'User Group' },
-    { label: 'POSP/Field Survey Agents', value: 'POSP Group' },
-    { label: 'Guest', value: 'Guest Group' },
+    { label: 'Admin', value: 'Admin' },
+    { label: 'User', value: 'User' },
+    { label: 'POSP/Field Survey Agents', value: 'POSP' },
+    { label: 'Guest', value: 'Guest' },
+    {label: 'Unrecognized group', value: 'No Group'}
   ]);
 
   // Helper to get admin access token
@@ -204,30 +205,73 @@ function UserRegistrationScreen() {
   };
 
   // Main function to handle user registration
-  const handleUserRegistrationPress = async () => {
-    if (!selectedGroup) {
-      Alert.alert('Validation Error', 'Please select a group before proceeding');
-      return;
-    }
+ // Main function to handle user registration
+ const handleUserRegistrationPress = async () => {
+   if (!selectedGroup) {
+     Alert.alert('Validation Error', 'Please select a group before proceeding');
+     return;
+   }
 
-    try {
-      console.log('Starting user registration process...');
-      const adminAccessToken = await getAdminAccessToken();
+   let adminAccessToken = null;
+   let userId = null;
 
-      await createUser(adminAccessToken);
-      const userId = await fetchUserId(adminAccessToken, phoneNumber);
-      const groupId = await fetchGroupId(adminAccessToken, selectedGroup);
+   try {
+     console.log('Starting user registration process...');
+     // Fetch admin access token
+     adminAccessToken = await getAdminAccessToken();
 
-      await assignUserToGroup(adminAccessToken, userId, groupId);
+     // Create user and fetch their ID
+     await createUser(adminAccessToken);
+     userId = await fetchUserId(adminAccessToken, phoneNumber);
 
-      Alert.alert('Success', 'User created and mapped to the group successfully');
-      console.log('User registration process completed successfully');
-      navigation.navigate('Login');
-    } catch (error) {
-      console.error('Error during user registration process:', error);
-      Alert.alert('Error', error.message);
-    }
-  };
+     // Fetch group ID
+     const groupId = await fetchGroupId(adminAccessToken, selectedGroup);
+
+     // Assign user to the group
+     await assignUserToGroup(adminAccessToken, userId, groupId);
+
+     Alert.alert('Success', 'User created and mapped to the group successfully');
+     console.log('User registration process completed successfully');
+     navigation.navigate('Login');
+   } catch (error) {
+     console.error('Error during user registration process:', error);
+
+     // If an error occurs after user creation, delete the user from Keycloak
+     if (userId && adminAccessToken) {
+       console.log('Attempting to delete the user due to error...');
+       await deleteUser(adminAccessToken, userId);
+     }
+
+     Alert.alert('Error', error.message);
+   }
+ };
+
+ // Helper to delete user
+ const deleteUser = async (adminAccessToken, userId) => {
+   try {
+     console.log(`Deleting user with ID: ${userId}`);
+     const response = await fetch(
+       `${keycloakConfig.baseurl}/admin/realms/${keycloakConfig.realmName}/users/${userId}`,
+       {
+         method: 'DELETE',
+         headers: {
+           Authorization: `Bearer ${adminAccessToken}`,
+         },
+       }
+     );
+
+     if (!response.ok) {
+       const errorDetail = await response.text();
+       console.error('Failed to delete user:', errorDetail);
+       throw new Error('Failed to delete user');
+     }
+
+     console.log('User deleted successfully');
+   } catch (error) {
+     console.error('Error deleting user:', error);
+     throw error; // Propagate the error for logging or further handling
+   }
+ };
 
   return (
     <View style={styles.container}>
