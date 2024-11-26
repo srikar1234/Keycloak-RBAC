@@ -154,7 +154,12 @@ function UserScreen() {
       <View style={styles.gridContainer}>
         {userRole === 'Admin-Client' && (
           <View style={styles.gridItem}>
-            <Button title="Go to Admin Screen" onPress={handleNavigateToAdminScreen} />
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: 'red' }]} // Set the background color here
+              onPress={handleNavigateToAdminScreen}
+            >
+              <Text style={styles.buttonText}>Go to Admin Screen</Text>
+            </TouchableOpacity>
           </View>
         )}
         <View style={styles.gridItem}>

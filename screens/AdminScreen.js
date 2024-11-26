@@ -36,35 +36,12 @@ function AdminScreen() {
     return () => clearInterval(timer);
   }, [authState]);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      // Prevent the default back action
-      e.preventDefault();
-  
-      // Show confirmation alert only once
-      Alert.alert(
-        'Confirm',
-        'Do you want to go back?',
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => {} },
-          {
-            text: 'Go Back',
-            style: 'destructive',
-            onPress: () => {
-              // Remove the listener to avoid loop
-              unsubscribe();
-              // Navigate back to UserScreen and pass updated auth state
-              navigation.navigate('User', {
-                authStateString: JSON.stringify(authState), userRole,
-              });
-            },
-          },
-        ]
-      );
-    });
-  
-    return unsubscribe; // Cleanup listener on unmount
-  }, [navigation, authState]);
+   const handleGoBackToUserScreen = () => {
+       navigation.navigate('User', {
+         authStateString: JSON.stringify(authState),
+         userRole,
+       });
+     };
 
   // Logout Function
   const handleLogout = async () => {
@@ -364,6 +341,9 @@ const handlePOSPApproval = async () => {
         <View style={styles.gridItem}>
           <Button title="Approve POSP" onPress={handlePOSPApproval} />
         </View>
+         <View style={styles.gridItem}>
+                  <Button title="Go Back to User Screen" onPress={handleGoBackToUserScreen} />
+                </View>
         <View style={styles.gridItem}>
           <Button title="Logout" onPress={handleLogout} />
         </View>

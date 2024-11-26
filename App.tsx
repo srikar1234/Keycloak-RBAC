@@ -13,7 +13,14 @@ export default function App() {
       <Stack.Navigator initialRouteName="Login">
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="User" component={UserScreen} />
-        <Stack.Screen name="Admin" component={AdminScreen} />
+        <Stack.Screen
+          name="Admin"
+          component={AdminScreen}
+          options={{
+            headerLeft: () => null, // Disable the back arrow button
+            gestureEnabled: false, // Disable swipe gestures for going back
+          }}
+        />
         <Stack.Screen name="Registration" component={UserRegistration} />
       </Stack.Navigator>
     </NavigationContainer>
