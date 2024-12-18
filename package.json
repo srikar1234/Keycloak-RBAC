@@ -12,6 +12,7 @@
   "dependencies": {
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/stack": "^6.4.1",
+    "android": "^0.0.8",
     "react": "18.3.1",
     "react-native": "0.76.1",
     "react-native-app-auth": "^8.0.0",
